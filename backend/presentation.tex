@@ -1,0 +1,147 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme{Madrid}
+\usecolortheme{seagull}
+\setbeamertemplate{navigation symbols}{}
+
+\title{Geo Serbia}
+\subtitle{Adaptive Geography Game Platform}
+\author{Student Project Presentation}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Problem and Motivation}
+  \begin{itemize}
+    \item Traditional map quiz apps are static and repetitive.
+    \item Players of different skill levels need different challenge intensity.
+    \item Admin moderation is needed for user-generated locations.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Project Goals}
+  \begin{itemize}
+    \item Build a game-style Serbia geography experience.
+    \item Implement secure auth and role-based admin features.
+    \item Add adaptive difficulty that reacts to player performance.
+    \item Provide measurable outcomes with tests and analytics.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Architecture}
+  \begin{itemize}
+    \item Backend: FastAPI + Tortoise ORM + PostgreSQL
+    \item Frontend: Vue 3 + Vue Router + Axios + Leaflet
+    \item Auth: HTTP-only cookie JWT sessions
+    \item Domains: users, locations, games, admin
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Core Data Model}
+  \begin{itemize}
+    \item \texttt{users}, \texttt{locations}, \texttt{game\_sessions}, \texttt{rounds}
+    \item Adaptive tables:
+    \begin{itemize}
+      \item \texttt{user\_skill\_profile}
+      \item \texttt{location\_difficulty\_profile}
+      \item \texttt{adaptive\_decision\_log}
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Adaptive Difficulty Logic}
+  \begin{itemize}
+    \item User skill computed from recent points and distances.
+    \item Location difficulty computed from historical outcomes.
+    \item Challenge start:
+    \begin{itemize}
+      \item \texttt{mode=adaptive}: pick rounds near user skill
+      \item \texttt{mode=fixed}: random selection
+    \end{itemize}
+    \item Every round updates both user and location profiles.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Main API Endpoints}
+  \begin{itemize}
+    \item \texttt{POST /api/v1/game/start}
+    \item \texttt{POST /api/v1/game/play}
+    \item \texttt{GET /api/v1/profile/adaptive-stats}
+    \item \texttt{GET /api/v1/admin/adaptive/stats}
+    \item \texttt{GET /api/v1/game/leaderboard/daily}
+    \item \texttt{GET /api/v1/game/leaderboard/monthly}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Admin Workflow}
+  \begin{itemize}
+    \item Users can submit new locations.
+    \item Non-admin submissions are pending by default.
+    \item Admin can approve/reject pending locations.
+    \item Admin-created locations are auto-approved in service layer.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Seeded Persona Profiles}
+  \begin{itemize}
+    \item \texttt{tojaga}: low skill, easy tier
+    \item \texttt{somi}: medium skill, normal tier
+    \item \texttt{maleza}: high skill, hard tier
+  \end{itemize}
+  \vspace{0.3cm}
+  Purpose: deterministic adaptive demos for evaluation.
+\end{frame}
+
+\begin{frame}{Testing Results}
+  \begin{itemize}
+    \item Auth, game, location, adaptive, and persona tests implemented.
+    \item Current backend test status: \textbf{11 passed}.
+    \item Frontend production build: successful.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Demo Plan (Live)}
+  \begin{enumerate}
+    \item Login as \texttt{tojaga}, play adaptive challenge.
+    \item Login as \texttt{somi}, compare difficulty.
+    \item Login as \texttt{maleza}, compare difficulty.
+    \item Login as admin, review pending submissions.
+    \item Open adaptive admin analytics page.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Deployment / Run Steps}
+  \begin{block}{Backend}
+    \texttt{aerich migrate --name adaptive\_profiles\_and\_start}\\
+    \texttt{aerich upgrade}\\
+    \texttt{python -m src.scripts.seeders.seed}\\
+    \texttt{uvicorn src.boot.main:app --reload}
+  \end{block}
+\end{frame}
+
+\begin{frame}{Limitations and Future Work}
+  \begin{itemize}
+    \item Replace heuristic adaptive formulas with model-based tuning.
+    \item Add richer anti-cheat and anomaly detection.
+    \item Migrate deprecated framework APIs.
+    \item Add A/B testing for adaptive parameter optimization.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Conclusion}
+  \begin{itemize}
+    \item Project is functional, tested, and presentable.
+    \item Adaptive gameplay and admin moderation are integrated.
+    \item Architecture is modular and ready for iterative improvement.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \centering
+  \Large Questions?
+\end{frame}
+
+\end{document}

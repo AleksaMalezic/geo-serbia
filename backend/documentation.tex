@@ -1,0 +1,235 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\geometry{margin=1in}
+
+\title{Geo Serbia\\Backend and Frontend System Documentation}
+\author{Student Project Documentation}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Project Overview}
+Geo Serbia is a Serbia-focused geography game inspired by GeoGuessr. A player sees a location image and must click on a map to guess where the place is. The system computes distance and score, tracks progress, and presents leaderboards and profile statistics.
+
+The final system consists of:
+\begin{itemize}[noitemsep]
+  \item Backend: FastAPI + Tortoise ORM + PostgreSQL
+  \item Frontend: Vue 3 + Vue Router + Axios + Leaflet
+  \item Authentication: cookie-based JWT sessions (HTTP-only cookies)
+  \item Adaptive gameplay: user and location difficulty profiling
+\end{itemize}
+
+\section{Goals and Scope}
+\subsection{Primary Goals}
+\begin{itemize}[noitemsep]
+  \item Build a game-like UX, not CRUD-like pages
+  \item Support secure user and admin roles
+  \item Add adaptive difficulty based on player performance
+  \item Provide leaderboard and profile analytics
+\end{itemize}
+
+\subsection{Out of Scope}
+\begin{itemize}[noitemsep]
+  \item Full machine-learning recommendation engine
+  \item Real-time multiplayer gameplay
+  \item Mobile-native app implementation
+\end{itemize}
+
+\section{System Architecture}
+\subsection{Backend Modules}
+\begin{itemize}[noitemsep]
+  \item \texttt{src/domains/users}: register/login/logout/me/profile
+  \item \texttt{src/domains/locations}: creation, approval flow, list/filter
+  \item \texttt{src/domains/games}: session, rounds, adaptive selection
+  \item \texttt{src/domains/admin}: global and adaptive admin analytics
+\end{itemize}
+
+\subsection{Frontend Modules}
+\begin{itemize}[noitemsep]
+  \item Auth page with login/register toggle and session restore
+  \item Home hero page and daily challenge call-to-action
+  \item Game page (image + map split screen)
+  \item Summary, leaderboard, profile, add location, admin pages
+\end{itemize}
+
+\section{Data Model}
+\subsection{Core Game Tables}
+\begin{itemize}[noitemsep]
+  \item \texttt{game\_sessions}: daily user sessions
+  \item \texttt{rounds}: per-guess records (distance, score)
+  \item \texttt{locations}: approved/pending locations
+  \item \texttt{users}: accounts and admin flag
+\end{itemize}
+
+\subsection{Adaptive Tables}
+\begin{itemize}[noitemsep]
+  \item \texttt{user\_skill\_profile}
+  \item \texttt{location\_difficulty\_profile}
+  \item \texttt{adaptive\_decision\_log}
+\end{itemize}
+
+\section{Authentication and Authorization}
+\begin{itemize}[noitemsep]
+  \item Login sets access and refresh tokens in HTTP-only cookies
+  \item Protected endpoints require valid cookie token
+  \item Admin endpoints require \texttt{is\_admin = True}
+\end{itemize}
+
+\section{Adaptive Difficulty Design}
+\subsection{User Skill Profile}
+For each user, the system keeps:
+\begin{itemize}[noitemsep]
+  \item \texttt{skill\_rating}
+  \item \texttt{recent\_avg\_distance\_km}
+  \item \texttt{recent\_avg\_points}
+  \item \texttt{consistency\_index}
+\end{itemize}
+
+\subsection{Location Difficulty Profile}
+For each location, the system keeps:
+\begin{itemize}[noitemsep]
+  \item \texttt{difficulty\_rating}
+  \item \texttt{global\_avg\_distance\_km}
+  \item \texttt{global\_avg\_points}
+  \item \texttt{attempt\_count}
+\end{itemize}
+
+\subsection{Challenge Start}
+\texttt{POST /api/v1/game/start?mode=adaptive|fixed}
+\begin{itemize}[noitemsep]
+  \item Adaptive: picks locations close to user skill target
+  \item Fixed: random selection
+  \item Logs decision and fallback usage
+\end{itemize}
+
+\subsection{Round Play}
+\texttt{POST /api/v1/game/play}
+\begin{itemize}[noitemsep]
+  \item Computes distance and score
+  \item Updates user and location adaptive profiles
+  \item Returns score data and adaptive metadata
+\end{itemize}
+
+\section{Location Moderation Workflow}
+\begin{itemize}[noitemsep]
+  \item Regular users submit pending locations (\texttt{is\_approved=False})
+  \item Admin-created locations auto-approve in service layer
+  \item Admin can approve/reject pending submissions
+\end{itemize}
+
+\section{Main API Endpoints}
+\begin{longtable}{|p{0.30\linewidth}|p{0.65\linewidth}|}
+\hline
+\textbf{Endpoint} & \textbf{Purpose} \\
+\hline
+\texttt{POST /api/v1/auth/register} & Register new user \\
+\hline
+\texttt{POST /api/v1/auth/login} & Login, set cookies \\
+\hline
+\texttt{GET /api/v1/auth/me} & Profile and core stats \\
+\hline
+\texttt{GET /api/v1/profile/adaptive-stats} & Adaptive profile metrics \\
+\hline
+\texttt{POST /api/v1/game/start} & Start fixed/adaptive challenge \\
+\hline
+\texttt{POST /api/v1/game/play} & Submit guess and compute result \\
+\hline
+\texttt{GET /api/v1/game/leaderboard/daily} & Daily leaderboard \\
+\hline
+\texttt{GET /api/v1/game/leaderboard/monthly} & Monthly leaderboard \\
+\hline
+\texttt{GET /api/v1/locations/} & List locations with filters \\
+\hline
+\texttt{GET /api/v1/locations/pending} & Pending list for admin \\
+\hline
+\texttt{POST /api/v1/locations/\{id\}/approve} & Approve location \\
+\hline
+\texttt{POST /api/v1/locations/\{id\}/reject} & Reject location \\
+\hline
+\texttt{GET /api/v1/admin/stats} & Global admin metrics \\
+\hline
+\texttt{GET /api/v1/admin/adaptive/stats} & Adaptive system metrics \\
+\hline
+\end{longtable}
+
+\section{Seeder Strategy}
+Seeders create deterministic gameplay quality:
+\begin{itemize}[noitemsep]
+  \item Users: admin + personas (\texttt{tojaga}, \texttt{somi}, \texttt{maleza})
+  \item Persona skill profiles:
+  \begin{itemize}[noitemsep]
+    \item \texttt{tojaga}: low skill (easy tier)
+    \item \texttt{somi}: medium skill (normal tier)
+    \item \texttt{maleza}: high skill (hard tier)
+  \end{itemize}
+  \item Locations: approved location set with spread difficulty profiles
+\end{itemize}
+
+\section{Testing and Validation}
+\subsection{Automated Tests}
+Implemented and passing:
+\begin{itemize}[noitemsep]
+  \item Auth tests
+  \item Game tests
+  \item Location tests
+  \item Adaptive endpoint and persona tests
+\end{itemize}
+
+Current result:
+\begin{itemize}[noitemsep]
+  \item \texttt{11 passed}
+\end{itemize}
+
+\subsection{Manual Smoke Test}
+\begin{enumerate}[noitemsep]
+  \item Login as \texttt{tojaga}, start adaptive challenge
+  \item Login as \texttt{somi}, compare difficulty
+  \item Login as \texttt{maleza}, compare difficulty
+  \item Login as admin, review pending locations and adaptive analytics
+\end{enumerate}
+
+\section{Runbook}
+\subsection{Migration}
+\begin{verbatim}
+aerich migrate --name adaptive_profiles_and_start
+aerich upgrade
+\end{verbatim}
+
+\subsection{Seed}
+\begin{verbatim}
+python -m src.scripts.seeders.seed
+\end{verbatim}
+
+\subsection{Run}
+\begin{verbatim}
+uvicorn src.boot.main:app --reload
+\end{verbatim}
+
+\section{Known Technical Debt}
+\begin{itemize}[noitemsep]
+  \item FastAPI lifecycle deprecation (\texttt{on\_event}) should move to lifespan API
+  \item Pydantic class-based config warnings can be migrated to ConfigDict
+  \item Tortoise field deprecation warnings should be cleaned up
+\end{itemize}
+
+\section{Conclusion}
+The project is stable for academic presentation:
+\begin{itemize}[noitemsep]
+  \item End-to-end gameplay works
+  \item Adaptive system is implemented with deterministic personas
+  \item Admin moderation and analytics are available
+  \item Automated tests pass
+\end{itemize}
+
+\end{document}

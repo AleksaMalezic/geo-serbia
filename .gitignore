@@ -1,0 +1,26 @@
+# Python
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/venv/
+backend/.env
+backend/.env.prod
+
+# Node
+frontend/geo-serbia-frontend/node_modules/
+frontend/geo-serbia-frontend/dist/
+
+# Env / secrets
+.env
+*.env
+!.env.example
+!.env.prod.example
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Uploads / runtime
+backend/src/static/uploads/locations/

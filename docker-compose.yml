@@ -1,0 +1,58 @@
+﻿
+services:
+  db:
+    image: postgres:16
+    container_name: geo_serbia_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: geo_serbia
+    ports:
+      - "5435:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d geo_serbia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: geo_serbia_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_USER: postgres
+      DATABASE_PASS: root
+      DATABASE_ADDRESS: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: geo_serbia
+      SECRET_KEY: supersecretkey
+      JWT_ALGORITHM: HS256
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_uploads:/app/src/static/uploads/locations
+
+  frontend:
+    build:
+      context: ./frontend/geo-serbia-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    container_name: geo_serbia_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  pg_data:
+  backend_uploads:
