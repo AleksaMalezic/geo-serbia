@@ -1,11 +1,12 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { gameApi } from "../api/game";
 import { locationsApi } from "../api/locations";
 import GameMap from "../components/GameMap.vue";
 import RoundProgress from "../components/RoundProgress.vue";
 import ScoreCounter from "../components/ScoreCounter.vue";
+import { useAuthStore } from "../stores/authStore";
 import {
   applyRoundOutcome,
   getAdaptiveMode,
@@ -15,7 +16,9 @@ import {
 } from "../composables/useAdaptiveDifficulty";
 
 const router = useRouter();
+const auth = useAuthStore();
 const totalRounds = 5;
+const GAME_PROGRESS_KEY = "geoSerbia.game.progress.v1";
 const loading = ref(true);
 const submitting = ref(false);
 const error = ref("");
@@ -59,6 +62,82 @@ const adaptiveStatusText = computed(() => {
   return `${modeText} (${source})`;
 });
 
+function progressDayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function clearSavedProgress() {
+  sessionStorage.removeItem(GAME_PROGRESS_KEY);
+}
+
+function saveProgress() {
+  const username = auth.user?.username || "";
+  if (!username || !rounds.value.length) return;
+
+  const snapshot = {
+    username,
+    dayKey: progressDayKey(),
+    sessionId: sessionId.value,
+    rounds: rounds.value,
+    roundIndex: roundIndex.value,
+    allResults: allResults.value,
+    revealedHints: revealedHints.value,
+    hintsUsedCount: hintsUsedCount.value,
+    adaptiveMode: adaptiveMode.value,
+    difficultyTier: difficultyTier.value,
+    skillRating: skillRating.value,
+    usedServerAdaptive: usedServerAdaptive.value,
+  };
+  sessionStorage.setItem(GAME_PROGRESS_KEY, JSON.stringify(snapshot));
+}
+
+function restoreProgress() {
+  const raw = sessionStorage.getItem(GAME_PROGRESS_KEY);
+  if (!raw) return false;
+
+  try {
+    const parsed = JSON.parse(raw);
+    const username = auth.user?.username || "";
+    if (!username || parsed?.username !== username || parsed?.dayKey !== progressDayKey()) {
+      clearSavedProgress();
+      return false;
+    }
+
+    if (!Array.isArray(parsed?.rounds) || parsed.rounds.length < 1) {
+      clearSavedProgress();
+      return false;
+    }
+
+    const nextRound = Number(parsed?.roundIndex || 1);
+    if (!Number.isFinite(nextRound) || nextRound < 1 || nextRound > totalRounds) {
+      clearSavedProgress();
+      return false;
+    }
+
+    rounds.value = parsed.rounds.slice(0, totalRounds);
+    sessionId.value = parsed.sessionId || null;
+    roundIndex.value = nextRound;
+    currentRound.value = rounds.value[roundIndex.value - 1] || null;
+    allResults.value = Array.isArray(parsed?.allResults) ? parsed.allResults : [];
+    revealedHints.value = Array.isArray(parsed?.revealedHints) ? parsed.revealedHints : [];
+    hintsUsedCount.value = Number(parsed?.hintsUsedCount || 0);
+    adaptiveMode.value = parsed?.adaptiveMode === "fixed" ? "fixed" : "adaptive";
+    difficultyTier.value = parsed?.difficultyTier || "Normal";
+    skillRating.value = Number(parsed?.skillRating || 52);
+    usedServerAdaptive.value = !!parsed?.usedServerAdaptive;
+
+    guess.value = null;
+    showResult.value = false;
+    roundResult.value = null;
+    recentImprovementPercent.value = 0;
+    loading.value = false;
+    return true;
+  } catch {
+    clearSavedProgress();
+    return false;
+  }
+}
+
 function setMode(mode) {
   const nextMode = mode === "fixed" ? "fixed" : "adaptive";
   if (adaptiveMode.value === nextMode) return;
@@ -87,6 +166,7 @@ async function buildClientRounds() {
 }
 
 async function startGame() {
+  clearSavedProgress();
   loading.value = true;
   error.value = "";
   usedServerAdaptive.value = false;
@@ -118,6 +198,7 @@ async function startGame() {
     hintsUsedCount.value = 0;
     hintLoading.value = false;
     recentImprovementPercent.value = 0;
+    saveProgress();
   } catch (e) {
     error.value = e?.response?.data?.detail || e?.message || "Failed to start game.";
   } finally {
@@ -148,6 +229,7 @@ function toSummary() {
   };
 
   sessionStorage.setItem("lastGameSummary", JSON.stringify(summary));
+  clearSavedProgress();
   router.push({ name: "summary" });
 }
 
@@ -238,6 +320,7 @@ async function submitGuess() {
       hintsUsedCount.value = 0;
       hintLoading.value = false;
       currentRound.value = rounds.value[roundIndex.value - 1] || null;
+      saveProgress();
     }, 2400);
   } catch (e) {
     error.value = e?.response?.data?.detail || "Could not submit guess.";
@@ -246,7 +329,20 @@ async function submitGuess() {
   }
 }
 
-onMounted(startGame);
+watch(
+  [roundIndex, rounds, allResults, revealedHints, hintsUsedCount, adaptiveMode, difficultyTier, skillRating],
+  () => {
+    if (!loading.value && !showResult.value) {
+      saveProgress();
+    }
+  },
+  { deep: true }
+);
+
+onMounted(() => {
+  if (restoreProgress()) return;
+  startGame();
+});
 </script>
 
 <template>

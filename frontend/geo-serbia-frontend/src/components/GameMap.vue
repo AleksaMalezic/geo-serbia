@@ -79,17 +79,14 @@ function animateLineAndFit() {
       drawRaf = requestAnimationFrame(tick);
     } else {
       lineLayer.setLatLngs([g, r]);
-      const bounds = L.latLngBounds([g, r]);
-      map.fitBounds(bounds.pad(0.45), { animate: true, duration: 0.8 });
     }
   };
 
   drawRaf = requestAnimationFrame(tick);
 }
 
-function resetViewport() {
+function clearResultLayers() {
   if (!map) return;
-  map.setView(props.center, props.zoom, { animate: true });
   if (lineLayer) {
     map.removeLayer(lineLayer);
     lineLayer = null;
@@ -121,7 +118,7 @@ watch(
     setGuessLayer();
     setRealLayer();
     if (props.showResult) animateLineAndFit();
-    else resetViewport();
+    else clearResultLayers();
   },
   { deep: true }
 );
