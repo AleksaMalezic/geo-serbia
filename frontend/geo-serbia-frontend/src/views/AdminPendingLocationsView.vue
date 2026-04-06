@@ -10,7 +10,7 @@ const items = ref([]);
 function imageUrl(raw) {
   if (!raw) return "";
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  return `http://localhost:8000${raw}`;
+  return raw.startsWith("/") ? raw : `/${raw}`;
 }
 
 function unwrapList(data) {

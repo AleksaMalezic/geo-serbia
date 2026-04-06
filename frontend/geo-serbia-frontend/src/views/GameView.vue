@@ -41,8 +41,7 @@ const imageUrl = computed(() => {
   const raw = currentRound.value?.image_url || currentRound.value?.image || currentRound.value?.photo_url || "";
   if (!raw) return "";
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
-  const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
-  return `http://${host}:8000${raw}`;
+  return raw.startsWith("/") ? raw : `/${raw}`;
 });
 
 const canSubmit = computed(() => !!guess.value && !submitting.value && !showResult.value && !!currentRound.value);
