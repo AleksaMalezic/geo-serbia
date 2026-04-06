@@ -79,12 +79,12 @@ function animateLineAndFit() {
       drawRaf = requestAnimationFrame(tick);
     } else {
       lineLayer.setLatLngs([g, r]);
-      const visible = map.getBound();
+      const visible = map.getBounds();
       const guessInside = visible.contains(L.latLng(g[0], g[1]));
-      const realInside = visible.contains(L.latLng(g[0], g[1]));
+      const realInside = visible.contains(L.latLng(r[0], r[1]));
       if (!guessInside || !realInside) {
         const bounds = L.latLngBounds([g, r]);
-        map.fitBounds(bounds.pad(0.2), {animate: true, duration: 0.8});
+        map.fitBounds(bounds.pad(0.2), { animate: true, duration: 0.8 });
       }
     }
   };
