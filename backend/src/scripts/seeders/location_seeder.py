@@ -283,8 +283,13 @@ def _slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
-def _image_url(name: str) -> str:
-    return f"https://picsum.photos/seed/geoserbia-{_slug(name)}/1280/720"
+def _image_url(lat: float, lng: float) -> str:
+    lat_s = f"{lat:.6f}"
+    lng_s = f"{lng:.6f}"
+    return (
+        "https://staticmap.openstreetmap.de/staticmap.php"
+        f"?center={lat_s},{lng_s}&zoom=12&size=1280x720&markers={lat_s},{lng_s},red-pushpin"
+    )
 
 
 def _generated_locations() -> list[dict]:
@@ -321,7 +326,7 @@ def _generated_locations() -> list[dict]:
 def _all_locations() -> list[dict]:
     combined = [*BASE_LOCATIONS, *_generated_locations()]
     for item in combined:
-        item["image_url"] = _image_url(item["name"])
+        item["image_url"] = _image_url(float(item["latitude"]), float(item["longitude"]))
         item["hints"] = (item.get("hints") or [])[:3]
     return combined
 
