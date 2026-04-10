@@ -2,6 +2,9 @@ from src.domains.games.models import LocationDifficultyProfile
 from src.domains.locations.models import Location
 from src.domains.users.models import User
 
+import re
+import unicodedata
+
 TARGET_LOCATION_COUNT = 40
 
 BASE_LOCATIONS = [
@@ -167,17 +170,18 @@ BASE_LOCATIONS = [
         ]
     },
     {
-        "name": "Rajac Wine Cellars",
-        "latitude": 43.7500,
-        "longitude": 22.2167,
+        "name": "Sava Savanović Watermill",
+        "latitude": 44.06,
+        "longitude": 19.41,
         "description": "Traditional wine village.",
         "hints": [
-            "Istočna Srbija.",
-            "Kamene vinske kuće."
+            "Zapadna Srbija.",
+            "Nalazi se kod sela Zarožje, na tridesetak kilometara od Bajine Bašte",
+            "Vezana je za legendu od Savi Savanoviću, srpskom vampiru.",
         ]
     },
     {
-        "name": "Drvengrad (Kustendorf)",
+        "name": "Drvengrad",
         "latitude": 43.7950,
         "longitude": 19.5110,
         "description": "Ethno village built by Emir Kusturica.",
@@ -208,7 +212,7 @@ BASE_LOCATIONS = [
     },
 
     {
-        "name": "Midzor Peak",
+        "name": "Midžor Peak",
         "latitude": 43.3740,
         "longitude": 22.6210,
         "description": "Highest peak of Serbia.",
@@ -218,7 +222,7 @@ BASE_LOCATIONS = [
         ]
     },
     {
-        "name": "Stara Planina Waterfall Tupavica",
+        "name": "Tupavica Waterfall",
         "latitude": 43.3500,
         "longitude": 22.6000,
         "description": "Beautiful waterfall in eastern Serbia.",
@@ -228,7 +232,7 @@ BASE_LOCATIONS = [
         ]
     },
     {
-        "name": "Manasija Fortress Walls",
+        "name": "Manasija Monastery",
         "latitude": 44.1015,
         "longitude": 21.4690,
         "description": "Fortified monastery complex.",
@@ -269,13 +273,13 @@ BASE_LOCATIONS = [
         ]
     },
     {
-        "name": "Ravanica Monastery",
-        "latitude": 43.9500,
-        "longitude": 21.4333,
-        "description": "Monastery of Prince Lazar.",
+        "name": "Visoki Dečani Monastery",
+        "latitude": 42.33,
+        "longitude": 20.16,
+        "description": "Zadužbina kralja Stefana Dečanskog.",
         "hints": [
-            "Blizu Cuprije.",
-            "Knez Lazar."
+            "Manastir na Kosovu i Metohiji.",
+            "Zadužbina kralja Stefana Dečanskog."
         ]
     },
     {
@@ -284,12 +288,13 @@ BASE_LOCATIONS = [
         "longitude": 19.7000,
         "description": "Tourist center on Zlatibor.",
         "hints": [
-            "Planina Zlatibor.",
-            "Popularno turističko mesto."
+            "Turistički centar na planini u zapadnoj Srbiji.",
+            "Popularno turističko mesto.",
+            "Blizu mesta Čajetina."
         ]
     },
     {
-        "name": "Stopica Cave",
+        "name": "Stopića Cave",
         "latitude": 43.6750,
         "longitude": 19.7500,
         "description": "Cave with terraces.",
@@ -310,13 +315,13 @@ BASE_LOCATIONS = [
     },
 
     {
-        "name": "Sokobanja Spa",
-        "latitude": 43.6440,
-        "longitude": 21.8690,
-        "description": "Famous spa town.",
+        "name": "Serbian Parliament",
+        "latitude": 44.49,
+        "longitude": 20.28,
+        "description": "Building of serbian parliament.",
         "hints": [
-            "Poznata banja.",
-            "Istočna Srbija."
+            "Opština Stari Grad.",
+            "Izvorni naziv je Narodna Skupština Kraljevine Jugoslavije."
         ]
     },
     {
@@ -325,8 +330,8 @@ BASE_LOCATIONS = [
         "longitude": 21.9000,
         "description": "Pyramid-shaped mountain.",
         "hints": [
-            "Neobičan oblik.",
-            "Misteriozna planina."
+            "Oblik piramide.",
+            "Misteriozna planina za koju se vezuju priče o natprirodnim pojavama i bićima."
         ]
     },
     {
@@ -349,17 +354,6 @@ BASE_LOCATIONS = [
             "Jugozapadna Srbija."
         ]
     },
-    {
-        "name": "Devil's Bridge (Vratna)",
-        "latitude": 44.1600,
-        "longitude": 22.3000,
-        "description": "Natural stone arch.",
-        "hints": [
-            "Kod Negotina.",
-            "Prirodni kameni luk."
-        ]
-    },
-
     {
         "name": "Vratna Gates",
         "latitude": 44.1605,
@@ -400,27 +394,18 @@ BASE_LOCATIONS = [
             "Na Dunavu."
         ]
     },
-    {
-        "name": "Negotin Center",
-        "latitude": 44.2260,
-        "longitude": 22.5310,
-        "description": "Town in eastern Serbia.",
-        "hints": [
-            "Istočna Srbija.",
-            "Blizu granice."
-        ]
-    }
 ]
 
 
-def _image_url(lat: float, lng: float) -> str:
-    lat_s = f"{lat:.6f}"
-    lng_s = f"{lng:.6f}"
-    return (
-        "https://staticmap.openstreetmap.de/staticmap.php"
-        f"?center={lat_s},{lng_s}&zoom=12&size=900x540&maptype=mapnik"
-        f"&markers={lat_s},{lng_s},red-pushpin"
-    )
+def _slugify_name(name: str) -> str:
+    ascii_text = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+
+
+def _image_url(name: str) -> str:
+    # Curated files should be uploaded as:
+    # /static/uploads/locations/<slug>-1.jpg
+    return f"/static/uploads/locations/{_slugify_name(name)}-1.jpg"
 
 
 def _all_locations() -> list[dict]:

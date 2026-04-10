@@ -40,6 +40,9 @@ const difficultyTier = ref("Normal");
 const usedServerAdaptive = ref(false);
 const recentImprovementPercent = ref(0);
 const skillRating = ref(getAdaptiveStatsSnapshot().current_skill_rating || 52);
+const photoIndex = ref(0);
+const failedPhotoIndexes = ref([]);
+const photoUnavailable = ref(false);
 
 const imageUrl = computed(() => {
   const raw = currentRound.value?.image_url || currentRound.value?.image || currentRound.value?.photo_url || "";
@@ -47,6 +50,35 @@ const imageUrl = computed(() => {
   if (raw.startsWith("http://") || raw.startsWith("https://")) return raw;
   return raw.startsWith("/") ? raw : `/${raw}`;
 });
+const imageCandidates = computed(() => {
+  const normalizeUrl = (value) => {
+    if (!value) return "";
+    if (value.startsWith("http://"/)  value.startsWith("https://")/) return value;
+    return value.startsWith("/") ? value : /${value};
+  };
+
+  const multi = currentRound.value?.image_urls;
+  if (Array.isArray(multi) && multi.length) {
+    return multi.map((item) => normalizeUrl(String(item  "").trim())).filter(Boolean);
+  }
+
+  const primary = normalizeUrl(imageUrl.value);
+  if (!primary) return [];
+
+  const match = primary.match(/^(.)-1(.[a-zA-Z0-9]+)(?.)?$/);
+  if (!match) return [primary];
+
+  const [, base, ext, query = ""] = match;
+  return Array.from({ length: 8 }, (_, idx) => ${base}-${idx + 1}${ext}${query});
+});
+const activeImageUrl = computed(() => {
+  if (photoUnavailable.value) return "";
+  return imageCandidates.value[photoIndex.value] || "";
+});
+const canPrevPhoto = computed(() => imageCandidates.value.length > 1 && photoIndex.value > 0 && !photoUnavailable.value);
+const canNextPhoto = computed(
+  () => imageCandidates.value.length > 1 && photoIndex.value < imageCandidates.value.length - 1 && !photoUnavailable.value
+);
 
 const canSubmit = computed(() => !!guess.value && !submitting.value && !showResult.value && !!currentRound.value);
 const maxHints = computed(() => {
@@ -234,6 +266,41 @@ function onGuess(value) {
   guess.value = value;
 }
 
+function resetPhotoState() {
+  photoIndex.value = 0;
+  failedPhotoIndexes.value = [];
+  photoUnavailable.value = false;
+}
+
+function previousPhoto() {
+  if (!canPrevPhoto.value) return;
+  photoIndex.value -= 1;
+}
+
+function nextPhoto() {
+  if (!canNextPhoto.value) return;
+  photoIndex.value += 1;
+}
+
+function onPhotoError() {
+  if (!imageCandidates.value.length) {
+    photoUnavailable.value = true;
+    return;
+  }
+
+  if (!failedPhotoIndexes.value.includes(photoIndex.value)) {
+    failedPhotoIndexes.value = [...failedPhotoIndexes.value, photoIndex.value];
+  }
+
+  const nextIndex = imageCandidates.value.findIndex((_, idx) => !failedPhotoIndexes.value.includes(idx));
+  if (nextIndex >= 0) {
+    photoIndex.value = nextIndex;
+    return;
+  }
+
+  photoUnavailable.value = true;
+}
+
 function toSummary() {
   const totalScore = allResults.value.reduce((sum, r) => sum + r.points, 0);
   const avgDistance =
@@ -364,6 +431,13 @@ watch(
   { deep: true }
 );
 
+watch(
+  () => currentRound.value?.id,
+  () => {
+    resetPhotoState();
+  }
+);
+
 onMounted(() => {
   if (restoreProgress()) return;
   startGame();
@@ -393,7 +467,34 @@ onMounted(() => {
     <div v-else class="game-layout">
       <div class="game-left panel">
         <div class="photo-wrap">
-          <img v-if="imageUrl" :src="imageUrl" alt="Guess this location" class="location-photo" />
+          <button
+            v-if="imageCandidates.length > 1"
+            class="photo-nav photo-nav--left"
+            type="button"
+            :disabled="!canPrevPhoto"
+            @click="previousPhoto"
+          >
+            ‹
+          </button>
+          <img
+            v-if="activeImageUrl"
+            :src="activeImageUrl"
+            alt="Guess this location"
+            class="location-photo"
+            @error="onPhotoError"
+          />
+          <button
+            v-if="imageCandidates.length > 1"
+            class="photo-nav photo-nav--right"
+            type="button"
+            :disabled="!canNextPhoto"
+            @click="nextPhoto"
+          >
+            ›
+          </button>
+          <div v-if="imageCandidates.length > 1 && activeImageUrl" class="photo-counter">
+            {{ photoIndex + 1 }} / {{ imageCandidates.length }}
+          </div>
           <div v-else class="empty-photo">No image available</div>
         </div>
         <div v-if="maxHints > 0" class="hint-panel">
