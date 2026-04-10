@@ -19,6 +19,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const totalRounds = 5;
 const GAME_PROGRESS_KEY = "geoSerbia.game.progress.v1";
+const GAME_HISTORY_KEY = "geoSerbia.game.history.v1";
 const loading = ref(true);
 const submitting = ref(false);
 const error = ref("");
@@ -68,6 +69,29 @@ function progressDayKey() {
 
 function clearSavedProgress() {
   sessionStorage.removeItem(GAME_PROGRESS_KEY);
+}
+
+function appendGameHistory(summary) {
+  const username = auth.user?.username || "";
+  if (!username || !summary) return;
+
+  let history = [];
+  try {
+    history = JSON.parse(localStorage.getItem(GAME_HISTORY_KEY) || "[]");
+  } catch {
+    history = [];
+  }
+
+  const scoped = Array.isArray(history) ? history.filter((item) => item?.username === username) : [];
+  const entry = {
+    username,
+    totalScore: Number(summary.totalScore || 0),
+    avgDistance: Number(summary.avgDistance || 0),
+    roundsPlayed: Array.isArray(summary.rounds) ? summary.rounds.length : 0,
+    finishedAt: new Date().toISOString(),
+  };
+  const next = [entry, ...scoped].slice(0, 20);
+  localStorage.setItem(GAME_HISTORY_KEY, JSON.stringify(next));
 }
 
 function saveProgress() {
@@ -229,6 +253,7 @@ function toSummary() {
   };
 
   sessionStorage.setItem("lastGameSummary", JSON.stringify(summary));
+  appendGameHistory(summary);
   clearSavedProgress();
   router.push({ name: "summary" });
 }
