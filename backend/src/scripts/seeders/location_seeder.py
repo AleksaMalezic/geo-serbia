@@ -411,7 +411,7 @@ def _image_url(name: str) -> str:
 def _all_locations() -> list[dict]:
     combined = [*BASE_LOCATIONS]
     for item in combined:
-        item["image_url"] = _image_url(float(item["latitude"]), float(item["longitude"]))
+        item["image_url"] = _image_url(item["name"])
         item["hints"] = (item.get("hints") or [])[:3]
     return combined
 
