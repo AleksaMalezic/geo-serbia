@@ -131,7 +131,7 @@ function saveProgress() {
     revealedHints: revealedHints.value,
     hintsUsedCount: hintsUsedCount.value,
     skillRating: skillRating.value,
-    rankTier: rankTier.value;
+    rankTier: rankTier.value,
   };
   sessionStorage.setItem(GAME_PROGRESS_KEY, JSON.stringify(snapshot));
 }
