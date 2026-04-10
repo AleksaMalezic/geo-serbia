@@ -59,17 +59,17 @@ const imageCandidates = computed(() => {
 
   const multi = currentRound.value?.image_urls;
   if (Array.isArray(multi) && multi.length) {
-    return multi.map((item) => normalizeUrl(String(item  "").trim())).filter(Boolean);
+    return multi.map((item) => normalizeUrl(String(item || "").trim())).filter(Boolean);
   }
 
   const primary = normalizeUrl(imageUrl.value);
   if (!primary) return [];
 
-  const match = primary.match(/^(.)-1(.[a-zA-Z0-9]+)(?.)?$/);
+  const match = primary.match(/^(.*)-1(\.[a-zA-Z0-9]+)(\?.)?$/);
   if (!match) return [primary];
 
   const [, base, ext, query = ""] = match;
-  return Array.from({ length: 8 }, (_, idx) => ${base}-${idx + 1}${ext}${query});
+  return Array.from({ length: 8 }, (_, idx) => `${base}-${idx + 1}${ext}${query}`);
 });
 const activeImageUrl = computed(() => {
   if (photoUnavailable.value) return "";
