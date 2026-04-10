@@ -53,7 +53,7 @@ const imageUrl = computed(() => {
 const imageCandidates = computed(() => {
   const normalizeUrl = (value) => {
     if (!value) return "";
-    if (value.startsWith("http://"/)  value.startsWith("https://")/) return value;
+    if (value.startsWith("http://")  value.startsWith("https://")) return value;
     return value.startsWith("/") ? value : /${value};
   };
 
