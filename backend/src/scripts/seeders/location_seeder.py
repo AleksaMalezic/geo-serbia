@@ -418,7 +418,8 @@ def _image_url(lat: float, lng: float) -> str:
     lng_s = f"{lng:.6f}"
     return (
         "https://staticmap.openstreetmap.de/staticmap.php"
-        f"?center={lat_s},{lng_s}&zoom=12&size=1280x720&markers={lat_s},{lng_s},red-pushpin"
+        f"?center={lat_s},{lng_s}&zoom=12&size=900x540&maptype=mapnik"
+        f"&markers={lat_s},{lng_s},red-pushpin"
     )
 
 
@@ -498,4 +499,3 @@ async def seed():
         f"Locations seeded. Created: {created_count}, Updated: {updated_count}, "
         f"Curated total: {len(locations)}, DB total: {total}"
     )
-    
