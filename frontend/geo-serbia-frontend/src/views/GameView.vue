@@ -54,7 +54,7 @@ const imageCandidates = computed(() => {
   const normalizeUrl = (value) => {
     if (!value) return "";
     if (value.startsWith("http://") || value.startsWith("https://")) return value;
-    return value.startsWith("/") ? value : /${value};
+    return value.startsWith("/") ? value : `/${value}`;
   };
 
   const multi = currentRound.value?.image_urls;
