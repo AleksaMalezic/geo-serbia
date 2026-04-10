@@ -1,5 +1,6 @@
 from datetime import datetime
-from random import shuffle
+from bisect import bisect_right
+from random import shuffle, uniform
 
 from fastapi import HTTPException
 from tortoise.functions import Max
@@ -17,6 +18,14 @@ from src.domains.users.models import User
 MAX_RECENT_ROUNDS = 10
 MAX_DAILY_ROUNDS = 5
 HINT_PENALTIES = [0.08, 0.12, 0.20]
+RANK_DISTRIBUTION = [
+    ("bronze", 0.20),
+    ("silver", 0.50),
+    ("gold", 0.70),
+    ("platinum", 0.85),
+    ("diamond", 0.95),
+    ("champion", 1.00),
+]
 
 
 def _clamp(value: float, min_value: float, max_value: float) -> float:
@@ -29,6 +38,21 @@ def _difficulty_tier(score: float) -> str:
     if score > 66:
         return "hard"
     return "normal"
+
+
+def _rank_from_percentile(percentile: float) -> str:
+    p = _clamp(percentile, 0.0, 1.0)
+    for name, threshold in RANK_DISTRIBUTION:
+        if p <= threshold:
+            return name
+    return "champion"
+
+
+def _percentile_from_sorted(skills: list[float], skill_rating: float) -> float:
+    if not skills:
+        return 0.5
+    position = bisect_right(skills, float(skill_rating))
+    return position / len(skills)
 
 
 def _normalize_hints(raw_hints) -> list[str]:
@@ -68,6 +92,62 @@ async def get_or_create_location_difficulty_profile(location_id: int) -> Locatio
     return await LocationDifficultyProfile.create(location_id=location_id, difficulty_rating=50)
 
 
+async def _recent_location_ids(user_id: int, limit: int = 40) -> set[int]:
+    recent_rounds = (
+        await Round.filter(session__user_id=user_id)
+        .order_by("-created_at")
+        .limit(limit)
+        .all()
+    )
+    return {int(r.location_id) for r in recent_rounds if r.location_id is not None}
+
+
+async def _get_rank_snapshot(skill_rating: float) -> tuple[str, float]:
+    profiles = await UserSkillProfile.all().only("skill_rating")
+    sorted_skills = sorted(float(p.skill_rating or 52) for p in profiles)
+    percentile = _percentile_from_sorted(sorted_skills, float(skill_rating))
+    return _rank_from_percentile(percentile), percentile
+
+
+def _select_adaptive_locations(enriched: list[dict], target: float, rounds: int, recent_ids: set[int]) -> tuple[list[dict], bool]:
+    if not enriched:
+        return [], True
+
+    noisy_target = _clamp(target + uniform(-12.0, 12.0), 0.0, 100.0)
+    windows = (14.0, 24.0, 100.0)
+    pool = []
+    fallback_used = False
+    for idx, window in enumerate(windows):
+        pool = [row for row in enriched if abs(row["difficulty_rating"] - noisy_target) <= window]
+        if len(pool) >= rounds or idx == len(windows) - 1:
+            fallback_used = idx > 0
+            break
+
+    shuffle(pool)
+    pool.sort(
+        key=lambda row: (
+            row["location"].id in recent_ids,
+            abs(row["difficulty_rating"] - noisy_target),
+        )
+    )
+
+    selected = pool[:rounds]
+    if len(selected) < rounds:
+        selected_ids = {row["location"].id for row in selected}
+        remaining = [row for row in enriched if row["location"].id not in selected_ids]
+        shuffle(remaining)
+        remaining.sort(
+            key=lambda row: (
+                row["location"].id in recent_ids,
+                abs(row["difficulty_rating"] - noisy_target),
+            )
+        )
+        selected.extend(remaining[: rounds - len(selected)])
+        fallback_used = True
+
+    return selected[:rounds], fallback_used
+
+
 async def get_hint(user_id: int, location_id: int, hints_used_count: int):
     _ = await get_or_create_daily_session(user_id)
     location = await Location.get_or_none(id=location_id, is_approved=True)
@@ -93,7 +173,7 @@ async def get_hint(user_id: int, location_id: int, hints_used_count: int):
 
 
 async def start_challenge(user_id: int, mode: str = "adaptive", rounds: int = MAX_DAILY_ROUNDS):
-    mode = "fixed" if mode == "fixed" else "adaptive"
+    mode = "adaptive"
     user_profile = await get_or_create_user_skill_profile(user_id)
     session = await get_or_create_daily_session(user_id)
 
@@ -111,26 +191,15 @@ async def start_challenge(user_id: int, mode: str = "adaptive", rounds: int = MA
             }
         )
 
-    fallback_used = False
-    chosen_band = "normal"
-    if mode == "fixed":
-        shuffle(enriched)
-        selected = enriched[:rounds]
-        chosen_band = "normal"
-    else:
-        target = float(user_profile.skill_rating or 52)
-        chosen_band = _difficulty_tier(target)
-        enriched.sort(key=lambda row: abs(row["difficulty_rating"] - target))
-        selected = enriched[:rounds]
-        if len(selected) < rounds:
-            fallback_used = True
-            shuffle(enriched)
-            selected = enriched[:rounds]
+    target = float(user_profile.skill_rating or 52)
+    recent_ids = await _recent_location_ids(user_id=user_id, limit=40)
+    selected, fallback_used = _select_adaptive_locations(enriched, target=target, rounds=rounds, recent_ids=recent_ids)
+    rank_tier, rank_percentile = await _get_rank_snapshot(target)
 
     await AdaptiveDecisionLog.create(
         user_id=user_id,
         mode=mode,
-        chosen_band=chosen_band,
+        chosen_band=rank_tier,
         fallback_used=fallback_used,
         candidate_pool_size=len(approved),
     )
@@ -158,6 +227,8 @@ async def start_challenge(user_id: int, mode: str = "adaptive", rounds: int = MA
         "mode": mode,
         "difficulty_tier": _difficulty_tier(float(user_profile.skill_rating or 52)),
         "skill_rating": round(float(user_profile.skill_rating or 52), 2),
+        "rank_tier": rank_tier,
+        "rank_percentile": round(rank_percentile * 100, 2),
         "rounds": response_rounds,
     }
 
@@ -170,6 +241,7 @@ async def _update_profiles_after_round(
 ):
     profile = await get_or_create_user_skill_profile(user_id)
     before_skill = float(profile.skill_rating or 52)
+    rank_tier_before, _ = await _get_rank_snapshot(before_skill)
 
     recent_rounds = (
         await Round.filter(session__user_id=user_id)
@@ -216,7 +288,15 @@ async def _update_profiles_after_round(
     )
     await location_profile.save()
 
-    return before_skill, float(profile.skill_rating or before_skill), _difficulty_tier(float(profile.skill_rating or 52))
+    after_skill = float(profile.skill_rating or before_skill)
+    rank_tier_after, _ = await _get_rank_snapshot(after_skill)
+    return (
+        before_skill,
+        after_skill,
+        _difficulty_tier(after_skill),
+        rank_tier_before,
+        rank_tier_after,
+    )
 
 
 async def play_round(user_id: int, location_id: int, guessed_lat: float, guessed_lon: float, hints_used_count: int = 0):
@@ -238,7 +318,7 @@ async def play_round(user_id: int, location_id: int, guessed_lat: float, guessed
     penalty = _hint_penalty(applied_hints)
     score = max(0.0, base_score * (1 - penalty))
 
-    skill_before, skill_after, difficulty_used = await _update_profiles_after_round(
+    skill_before, skill_after, difficulty_used, rank_tier_before, rank_tier_after = await _update_profiles_after_round(
         user_id=user_id,
         location_id=location.id,
         round_score=score,
@@ -274,6 +354,8 @@ async def play_round(user_id: int, location_id: int, guessed_lat: float, guessed
         "difficulty_used": difficulty_used,
         "skill_rating_before": round(skill_before, 2),
         "skill_rating_after": round(skill_after, 2),
+        "rank_tier_before": rank_tier_before,
+        "rank_tier_after": rank_tier_after,
     }
 
 
@@ -344,9 +426,14 @@ async def get_user_adaptive_stats(user_id: int):
         after_avg = (sum(after) / len(after)) if after else 0
         improvement = ((after_avg - before_avg) / before_avg) * 100 if before_avg > 0 else 0
 
+    current_skill = float(profile.skill_rating or 52)
+    rank_tier, rank_percentile = await _get_rank_snapshot(current_skill)
+
     return {
-        "current_skill_rating": round(float(profile.skill_rating or 52), 2),
-        "difficulty_tier": _difficulty_tier(float(profile.skill_rating or 52)),
+        "current_skill_rating": round(current_skill, 2),
+        "difficulty_tier": _difficulty_tier(current_skill),
+        "rank_tier": rank_tier,
+        "rank_percentile": round(rank_percentile * 100, 2),
         "recent_improvement_percent": round(improvement, 2),
         "recent_avg_distance_km": round(float(profile.recent_avg_distance_km or 0), 2),
         "recent_avg_points": round(float(profile.recent_avg_points or 0), 2),
@@ -356,17 +443,23 @@ async def get_user_adaptive_stats(user_id: int):
 
 async def get_admin_adaptive_stats():
     profiles = await UserSkillProfile.all()
+    sorted_skills = sorted(float(p.skill_rating or 52) for p in profiles)
+
     easy = 0
     normal = 0
     hard = 0
+    rank_distribution = {name: 0 for name, _ in RANK_DISTRIBUTION}
     for p in profiles:
-        tier = _difficulty_tier(float(p.skill_rating or 52))
+        skill = float(p.skill_rating or 52)
+        tier = _difficulty_tier(skill)
         if tier == "easy":
             easy += 1
         elif tier == "hard":
             hard += 1
         else:
             normal += 1
+        percentile = _percentile_from_sorted(sorted_skills, skill)
+        rank_distribution[_rank_from_percentile(percentile)] += 1
 
     decision_count = await AdaptiveDecisionLog.all().count()
     fallback_count = await AdaptiveDecisionLog.filter(fallback_used=True).count()
@@ -391,6 +484,7 @@ async def get_admin_adaptive_stats():
             "normal": normal,
             "hard": hard,
         },
+        "rank_distribution": rank_distribution,
         "fallback_rate": round(fallback_rate, 2),
         "top_unstable_locations": unstable,
     }

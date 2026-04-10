@@ -1,10 +1,19 @@
 <script setup>
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { getAdaptiveAdminStats } from "../api/admin";
 
 const loading = ref(true);
 const error = ref("");
 const stats = ref(null);
+const rankOrder = ["bronze", "silver", "gold", "platinum", "diamond", "champion"];
+const rankCards = computed(() => {
+  const distribution = stats.value?.rank_distribution || {};
+  return rankOrder.map((rank) => ({
+    key: rank,
+    label: `${rank.charAt(0).toUpperCase()}${rank.slice(1)} Users`,
+    value: Number(distribution?.[rank] ?? 0),
+  }));
+});
 
 async function load() {
   loading.value = true;
@@ -39,17 +48,9 @@ onMounted(load);
           <span>Fallback Rate</span>
           <strong>{{ Number(stats.fallback_rate || 0).toFixed(2) }}%</strong>
         </article>
-        <article class="metric-card">
-          <span>Easy Tier Users</span>
-          <strong>{{ stats.tier_distribution?.easy ?? 0 }}</strong>
-        </article>
-        <article class="metric-card">
-          <span>Normal Tier Users</span>
-          <strong>{{ stats.tier_distribution?.normal ?? 0 }}</strong>
-        </article>
-        <article class="metric-card">
-          <span>Hard Tier Users</span>
-          <strong>{{ stats.tier_distribution?.hard ?? 0 }}</strong>
+        <article v-for="item in rankCards" :key="item.key" class="metric-card">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </article>
       </div>
 

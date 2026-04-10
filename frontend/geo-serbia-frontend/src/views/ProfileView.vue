@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { profileApi } from "../api/profile";
-import { getAdaptiveMode, getAdaptiveStatsSnapshot, setAdaptiveMode } from "../composables/useAdaptiveDifficulty";
+import { getAdaptiveStatsSnapshot } from "../composables/useAdaptiveDifficulty";
 
 const GAME_HISTORY_KEY = "geoSerbia.game.history.v1";
 
@@ -12,11 +12,10 @@ const stats = ref({
 });
 const adaptiveStats = ref({
   current_skill_rating: 52,
-  difficulty_tier: "Normal",
+  rank_tier: "bronze",
   recent_improvement_percent: 0,
   recent_avg_distance_km: 0,
 });
-const adaptiveMode = ref(getAdaptiveMode());
 const loading = ref(true);
 const recentGames = ref([]);
 
@@ -29,7 +28,7 @@ const averageDistance = computed(() => {
   const value = Number(adaptiveStats.value.recent_avg_distance_km || 0);
   return Number.isFinite(value) ? value : 0;
 });
-const tierText = computed(() => adaptiveStats.value.difficulty_tier || "Normal");
+const tierText = computed(() => adaptiveStats.value.rank_tier || "bronze");
 const skillRating = computed(() => Number(adaptiveStats.value.current_skill_rating || 52));
 const skillLevel = computed(() => {
   if (skillRating.value < 35) return "Explorer";
@@ -37,11 +36,6 @@ const skillLevel = computed(() => {
   if (skillRating.value < 80) return "Pathfinder";
   return "Expert";
 });
-
-function setMode(mode) {
-  adaptiveMode.value = mode === "fixed" ? "fixed" : "adaptive";
-  setAdaptiveMode(adaptiveMode.value);
-}
 
 function formatDate(raw) {
   if (!raw) return "-";
@@ -76,7 +70,7 @@ onMounted(async () => {
       const adaptivePayload = adaptiveResponse?.data?.data ?? adaptiveResponse?.data ?? {};
       adaptiveStats.value = {
         current_skill_rating: Number(adaptivePayload?.current_skill_rating || 52),
-        difficulty_tier: adaptivePayload?.difficulty_tier || "Normal",
+        rank_tier: adaptivePayload?.rank_tier || "bronze",
         recent_improvement_percent: Number(adaptivePayload?.recent_improvement_percent || 0),
         recent_avg_distance_km: Number(adaptivePayload?.recent_avg_distance_km || 0),
       };
@@ -84,7 +78,7 @@ onMounted(async () => {
       const fallback = getAdaptiveStatsSnapshot();
       adaptiveStats.value = {
         current_skill_rating: Number(fallback?.current_skill_rating || 52),
-        difficulty_tier: fallback?.difficulty_tier || "Normal",
+        rank_tier: bronze,
         recent_improvement_percent: Number(fallback?.recent_improvement_percent || 0),
         recent_avg_distance_km: 0,
       };
@@ -101,10 +95,6 @@ onMounted(async () => {
     <div class="panel profile-panel">
       <div class="profile-head">
         <h1>Your Profile</h1>
-        <div class="mode-toggle">
-          <button :class="['tab', { active: adaptiveMode === 'adaptive' }]" @click="setMode('adaptive')">Adaptive</button>
-          <button :class="['tab', { active: adaptiveMode === 'fixed' }]" @click="setMode('fixed')">Fixed</button>
-        </div>
       </div>
 
       <div v-if="loading">Loading...</div>
@@ -133,8 +123,8 @@ onMounted(async () => {
           </div>
 
           <div class="profile-adaptive-line">
-            <span>Mode: {{ adaptiveMode === "adaptive" ? "Adaptive" : "Fixed" }}</span>
-            <span>Tier: {{ tierText }}</span>
+            <span>Mode: Adaptive</span>
+            <span>Rank: {{ tierText }}</span>
             <span>Level: {{ skillLevel }}</span>
           </div>
 

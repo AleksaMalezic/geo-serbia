@@ -9,10 +9,8 @@ import ScoreCounter from "../components/ScoreCounter.vue";
 import { useAuthStore } from "../stores/authStore";
 import {
   applyRoundOutcome,
-  getAdaptiveMode,
   getAdaptiveStatsSnapshot,
   selectAdaptiveRounds,
-  setAdaptiveMode,
 } from "../composables/useAdaptiveDifficulty";
 
 const router = useRouter();
@@ -35,11 +33,9 @@ const allResults = ref([]);
 const revealedHints = ref([]);
 const hintLoading = ref(false);
 const hintsUsedCount = ref(0);
-const adaptiveMode = ref(getAdaptiveMode());
-const difficultyTier = ref("Normal");
-const usedServerAdaptive = ref(false);
 const recentImprovementPercent = ref(0);
 const skillRating = ref(getAdaptiveStatsSnapshot().current_skill_rating || 52);
+const rankTier = ref("bronze");
 const photoIndex = ref(0);
 const failedPhotoIndexes = ref([]);
 const photoUnavailable = ref(false);
@@ -89,11 +85,6 @@ const canAskHint = computed(() => {
   if (!currentRound.value || showResult.value || hintLoading.value) return false;
   return hintsUsedCount.value < maxHints.value;
 });
-const adaptiveStatusText = computed(() => {
-  const source = usedServerAdaptive.value ? "server" : "local fallback";
-  const modeText = adaptiveMode.value === "adaptive" ? "Adaptive" : "Fixed";
-  return `${modeText} (${source})`;
-});
 
 function progressDayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -139,10 +130,8 @@ function saveProgress() {
     allResults: allResults.value,
     revealedHints: revealedHints.value,
     hintsUsedCount: hintsUsedCount.value,
-    adaptiveMode: adaptiveMode.value,
-    difficultyTier: difficultyTier.value,
     skillRating: skillRating.value,
-    usedServerAdaptive: usedServerAdaptive.value,
+    rankTier: rankTier.value;
   };
   sessionStorage.setItem(GAME_PROGRESS_KEY, JSON.stringify(snapshot));
 }
@@ -177,10 +166,8 @@ function restoreProgress() {
     allResults.value = Array.isArray(parsed?.allResults) ? parsed.allResults : [];
     revealedHints.value = Array.isArray(parsed?.revealedHints) ? parsed.revealedHints : [];
     hintsUsedCount.value = Number(parsed?.hintsUsedCount || 0);
-    adaptiveMode.value = parsed?.adaptiveMode === "fixed" ? "fixed" : "adaptive";
-    difficultyTier.value = parsed?.difficultyTier || "Normal";
     skillRating.value = Number(parsed?.skillRating || 52);
-    usedServerAdaptive.value = !!parsed?.usedServerAdaptive;
+    rankTier.value = String(parsed?.rankTier || "bronze");
 
     guess.value = null;
     showResult.value = false;
@@ -194,22 +181,14 @@ function restoreProgress() {
   }
 }
 
-function setMode(mode) {
-  const nextMode = mode === "fixed" ? "fixed" : "adaptive";
-  if (adaptiveMode.value === nextMode) return;
-  adaptiveMode.value = nextMode;
-  setAdaptiveMode(adaptiveMode.value);
-  startGame();
-}
-
 function parseStartPayload(raw) {
   const payload = raw?.data ?? raw ?? {};
   const items = payload?.rounds || payload?.items || payload?.locations || [];
   const normalized = Array.isArray(items) ? items : [];
-  const tier = payload?.difficulty_tier || payload?.difficulty || null;
+  const rank = payload?.rank_tier || "bronze";
   const skill = Number(payload?.skill_rating || payload?.skill_rating_before || skillRating.value || 52);
   const session = payload?.session_id || payload?.game_id || `local-${Date.now()}`;
-  return { rounds: normalized, tier, skill, session };
+  return { rounds: normalized, rank, skill, session };
 }
 
 async function buildClientRounds() {
@@ -218,30 +197,27 @@ async function buildClientRounds() {
   if (!Array.isArray(items) || items.length < totalRounds) {
     throw new Error("Not enough approved locations for a 5-round game.");
   }
-  return selectAdaptiveRounds(items, totalRounds, adaptiveMode.value);
+  return selectAdaptiveRounds(items, totalRounds, "adaptive");
 }
 
 async function startGame() {
   clearSavedProgress();
   loading.value = true;
   error.value = "";
-  usedServerAdaptive.value = false;
   try {
     try {
-      const response = await gameApi.startChallenge(adaptiveMode.value);
+      const response = await gameApi.startChallenge();
       const parsed = parseStartPayload(response.data);
       if (!parsed.rounds.length) throw new Error("No rounds from /game/start");
       rounds.value = parsed.rounds.slice(0, totalRounds);
       sessionId.value = parsed.session;
-      difficultyTier.value = parsed.tier || "Normal";
+      rankTier.value = parsed.tier || "bronze";
       skillRating.value = parsed.skill;
-      usedServerAdaptive.value = true;
     } catch {
       rounds.value = await buildClientRounds();
       sessionId.value = `local-${Date.now()}`;
-      difficultyTier.value = rounds.value[0]?.adaptive_difficulty || getAdaptiveStatsSnapshot().difficulty_tier || "Normal";
       skillRating.value = getAdaptiveStatsSnapshot().current_skill_rating || 52;
-      usedServerAdaptive.value = false;
+      rankTier.value = "bronze";
     }
 
     currentRound.value = rounds.value[0] || null;
@@ -313,8 +289,8 @@ function toSummary() {
     avgDistance,
     rounds: allResults.value,
     adaptive: {
-      mode: adaptiveMode.value,
-      tier: difficultyTier.value,
+      mode: "adaptive",
+      rank_tier: rankTier.value,
       skillRating: skillRating.value,
     },
   };
@@ -368,7 +344,7 @@ async function submitGuess() {
 
     const skillBefore = Number(resultData?.skill_rating_before ?? localAdaptive.skill_rating_before ?? skillRating.value);
     const skillAfter = Number(resultData?.skill_rating_after ?? localAdaptive.skill_rating_after ?? skillBefore);
-    const usedDifficulty = resultData?.difficulty_used || resultData?.difficulty || currentRound.value?.adaptive_difficulty || "Normal";
+    const rankAfter = String(resultData?.rank_tier_after || rankTier.value || "bronze");
 
     const result = {
       round: roundIndex.value,
@@ -379,9 +355,9 @@ async function submitGuess() {
         lat: Number(currentRound.value?.latitude),
         lng: Number(currentRound.value?.longitude),
       },
-      difficulty_used: usedDifficulty,
       skill_rating_before: skillBefore,
       skill_rating_after: skillAfter,
+      rank_tier_after: rankAfter,
       base_score: Number(resultData?.base_score || resultData?.score || 0),
       hint_penalty_percent: Number(resultData?.hint_penalty_percent || 0),
       hints_used_count: Number(resultData?.hints_used_count ?? hintsUsedCount.value),
@@ -390,7 +366,7 @@ async function submitGuess() {
       ),
     };
 
-    difficultyTier.value = usedDifficulty;
+    rankTier.value = rankAfter;
     skillRating.value = skillAfter;
     recentImprovementPercent.value = result.recent_improvement_percent;
     roundResult.value = result;
@@ -422,7 +398,7 @@ async function submitGuess() {
 }
 
 watch(
-  [roundIndex, rounds, allResults, revealedHints, hintsUsedCount, adaptiveMode, difficultyTier, skillRating],
+  [roundIndex, rounds, allResults, revealedHints, hintsUsedCount, rankTier, skillRating],
   () => {
     if (!loading.value && !showResult.value) {
       saveProgress();
@@ -450,15 +426,10 @@ onMounted(() => {
       <RoundProgress :round="roundIndex" :total="5" />
       <div class="adaptive-chip-wrap">
         <span class="adaptive-chip">
-          Difficulty: {{ difficultyTier }} | Skill {{ skillRating.toFixed(1) }}
+          Rank: {{ rankTier }} | Skill {{ skillRating.toFixed(1) }}
         </span>
-        <span class="adaptive-sub">{{ adaptiveStatusText }}</span>
       </div>
-      <div class="mode-toggle">
-        <button :class="['tab', { active: adaptiveMode === 'adaptive' }]" @click="setMode('adaptive')">Adaptive</button>
-        <button :class="['tab', { active: adaptiveMode === 'fixed' }]" @click="setMode('fixed')">Fixed</button>
-        <button class="btn btn-ghost" @click="startGame">Restart</button>
-      </div>
+      <div></div>
     </div>
 
     <p v-if="error" class="error-text">{{ error }}</p>
@@ -474,7 +445,7 @@ onMounted(() => {
             :disabled="!canPrevPhoto"
             @click="previousPhoto"
           >
-            ‹
+            &lsaquo;
           </button>
           <img
             v-if="activeImageUrl"
@@ -490,7 +461,7 @@ onMounted(() => {
             :disabled="!canNextPhoto"
             @click="nextPhoto"
           >
-            ›
+            &rsaquo;
           </button>
           <div v-if="imageCandidates.length > 1 && activeImageUrl" class="photo-counter">
             {{ photoIndex + 1 }} / {{ imageCandidates.length }}

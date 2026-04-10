@@ -1,10 +1,8 @@
 import http from "./http";
 
 export const gameApi = {
-  startChallenge(mode = "adaptive") {
-    return http.post("/game/start", null, {
-      params: { mode },
-    });
+  startChallenge() {
+    return http.post("/game/start");
   },
   requestHint({ locationId, hintsUsedCount }) {
     return http.post("/game/hint", null, {
