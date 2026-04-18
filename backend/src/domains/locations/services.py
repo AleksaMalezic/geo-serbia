@@ -20,6 +20,17 @@ async def create_location(data: dict, current_user: User):
     payload["is_approved"] = bool(current_user.is_admin)
     return await Location.create(**payload)
 
+
+async def update_location(location_id: int, data: dict):
+    location = await Location.filter(id=location_id).first()
+    if not location:
+        return None
+
+    for key, value in data.items():
+        setattr(location, key, value)
+    await location.save()
+    return location
+
 async def delete_location(location_id: int):
     location = await Location.filter(id=location_id).first()
     if location:

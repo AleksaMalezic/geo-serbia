@@ -24,6 +24,7 @@ async function onLogout() {
         <RouterLink to="/leaderboard">Leaderboard</RouterLink>
         <RouterLink to="/add-location">Add Location</RouterLink>
         <RouterLink v-if="isAdmin" to="/admin/pending-locations">Pending Locations</RouterLink>
+        <RouterLink v-if="isAdmin" to="/admin/locations">Manage Locations</RouterLink>
         <RouterLink v-if="isAdmin" to="/admin/adaptive-stats">Adaptive Analytics</RouterLink>
       </div>
       <div class="nav-user">

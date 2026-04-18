@@ -21,6 +21,12 @@ const routes = [
     component: () => import("../views/AdminAdaptiveStatsView.vue"),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+  {
+    path: "/admin/locations",
+    name: "admin-locations",
+    component: () => import("../views/AdminLocationsView.vue"),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
   { path: "/:pathMatch(.*)*", redirect: "/" },
 ];
 
