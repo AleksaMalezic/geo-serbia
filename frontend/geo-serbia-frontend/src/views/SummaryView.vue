@@ -3,11 +3,11 @@ import { computed } from "vue";
 
 const summary = computed(() => {
   const raw = sessionStorage.getItem("lastGameSummary");
-  if (!raw) return { totalScore: 0, avgDistance: 0, rounds: [] };
+  if (!raw) return { totalScore: 0, avgDistance: 0, rounds: [], adaptive: {} };
   try {
     return JSON.parse(raw);
   } catch {
-    return { totalScore: 0, avgDistance: 0, rounds: [] };
+    return { totalScore: 0, avgDistance: 0, rounds: [], adaptive: {} };
   }
 });
 </script>
@@ -24,6 +24,22 @@ const summary = computed(() => {
         <div>
           <span>Average Distance</span>
           <strong>{{ Number(summary.avgDistance || 0).toFixed(2) }} km</strong>
+        </div>
+      </div>
+
+      <div class="profile-adaptive-line">
+        <span>Rank: {{ summary?.adaptive?.rank_tier || "-" }}</span>
+      </div>
+      <div class="profile-skill-wrap">
+        <div class="profile-skill-label">
+          <span>Skill Progress</span>
+          <strong>{{ Number(summary?.adaptive?.skillRating || 0).toFixed(1) }}/100</strong>
+        </div>
+        <div class="profile-skill-bar">
+          <div
+            class="profile-skill-fill"
+            :style="{ width: `${Math.max(0, Math.min(100, Number(summary?.adaptive?.skillRating || 0)))}%` }"
+          ></div>
         </div>
       </div>
 

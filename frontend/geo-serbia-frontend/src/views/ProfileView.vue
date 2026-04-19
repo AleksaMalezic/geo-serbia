@@ -30,12 +30,6 @@ const averageDistance = computed(() => {
 });
 const tierText = computed(() => adaptiveStats.value.rank_tier || "bronze");
 const skillRating = computed(() => Number(adaptiveStats.value.current_skill_rating || 52));
-const skillLevel = computed(() => {
-  if (skillRating.value < 35) return "Explorer";
-  if (skillRating.value < 60) return "Navigator";
-  if (skillRating.value < 80) return "Pathfinder";
-  return "Expert";
-});
 
 function formatDate(raw) {
   if (!raw) return "-";
@@ -123,9 +117,7 @@ onMounted(async () => {
           </div>
 
           <div class="profile-adaptive-line">
-            <span>Mode: Adaptive</span>
             <span>Rank: {{ tierText }}</span>
-            <span>Level: {{ skillLevel }}</span>
           </div>
 
           <div class="profile-skill-wrap">

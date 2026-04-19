@@ -424,12 +424,6 @@ onMounted(() => {
   <section class="game-page container">
     <div class="game-header-row">
       <RoundProgress :round="roundIndex" :total="5" />
-      <div class="adaptive-chip-wrap">
-        <span class="adaptive-chip">
-          Rank: {{ rankTier }} | Skill {{ skillRating.toFixed(1) }}
-        </span>
-      </div>
-      <div></div>
     </div>
 
     <p v-if="error" class="error-text">{{ error }}</p>
